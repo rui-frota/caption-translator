@@ -1,0 +1,22 @@
+# .NET build output
+**/bin/
+**/obj/
+
+# Local Python environments and caches
+.argos-venv/
+.argos-venv312/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# IDE and OS files
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local logs and temporary files
+*.log
+*.tmp
