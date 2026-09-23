@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CaptionTranslator", "src\CaptionTranslator\CaptionTranslator.csproj", "{3D6A3794-1A67-43E8-9E4E-1B3F1D211FBB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CaptionTranslator.Tests", "tests\CaptionTranslator.Tests\CaptionTranslator.Tests.csproj", "{3497E540-1C90-49C9-BD4B-3C23C09AD1C0}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3D6A3794-1A67-43E8-9E4E-1B3F1D211FBB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3D6A3794-1A67-43E8-9E4E-1B3F1D211FBB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3D6A3794-1A67-43E8-9E4E-1B3F1D211FBB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3D6A3794-1A67-43E8-9E4E-1B3F1D211FBB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3497E540-1C90-49C9-BD4B-3C23C09AD1C0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3497E540-1C90-49C9-BD4B-3C23C09AD1C0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3497E540-1C90-49C9-BD4B-3C23C09AD1C0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3497E540-1C90-49C9-BD4B-3C23C09AD1C0}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
