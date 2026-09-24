@@ -103,6 +103,7 @@ public partial class MainWindow : Window
             await Dispatcher.InvokeAsync(() =>
             {
                 SourceText.Text = _sourceTranscript.Append(stableText);
+                SourceText.ScrollToEnd();
             }, DispatcherPriority.Background);
 
             var pendingText = _pendingTranslation.Append(newSourceSegment);
@@ -126,7 +127,7 @@ public partial class MainWindow : Window
             {
                 _pendingTranslation.Clear();
                 await Dispatcher.InvokeAsync(
-                    () => TranslationText.Text = _translationTranscript.Append(onlineTranslation),
+                    () => UpdateTranslationText(onlineTranslation),
                     DispatcherPriority.Background);
             }
             else
@@ -143,7 +144,7 @@ public partial class MainWindow : Window
                 {
                     _pendingTranslation.Clear();
                     await Dispatcher.InvokeAsync(
-                        () => TranslationText.Text = _translationTranscript.Append(offlineTranslation),
+                        () => UpdateTranslationText(offlineTranslation),
                         DispatcherPriority.Background);
                 }
             }
@@ -157,6 +158,18 @@ public partial class MainWindow : Window
             frame.Dispose();
             _isRecognizing = false;
         }
+    }
+
+    private void UpdateTranslationText(string translation)
+    {
+        var newTranslationSegment = _translationTranscript.GetNewSegment(translation);
+        if (newTranslationSegment.Length == 0)
+        {
+            return;
+        }
+
+        TranslationText.Text = _translationTranscript.Append(newTranslationSegment);
+        TranslationText.ScrollToEnd();
     }
 
 }

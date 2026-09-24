@@ -55,4 +55,22 @@ public sealed class TranscriptBufferTests
 
         Assert.Empty(transcript.GetNewSegment("This is complete"));
     }
+
+    [Fact]
+    public void GetNewSegment_DetectsSingleWordOverlap()
+    {
+        var transcript = new TranscriptBuffer();
+        transcript.Append("I like");
+
+        Assert.Equal("music", transcript.GetNewSegment("like music"));
+    }
+
+    [Fact]
+    public void Append_DoesNotAddTextAlreadyContainedInTranscript()
+    {
+        var transcript = new TranscriptBuffer();
+        transcript.Append("I like music today");
+
+        Assert.Equal("I like music today", transcript.Append("like music"));
+    }
 }

@@ -17,7 +17,8 @@ public sealed class TranscriptBuffer
         }
 
         if (string.Equals(_text, incoming, StringComparison.OrdinalIgnoreCase)
-            || _text.EndsWith(incoming, StringComparison.OrdinalIgnoreCase))
+            || _text.EndsWith(incoming, StringComparison.OrdinalIgnoreCase)
+            || _text.Contains(incoming, StringComparison.OrdinalIgnoreCase))
         {
             return string.Empty;
         }
@@ -48,7 +49,8 @@ public sealed class TranscriptBuffer
         }
 
         if (string.Equals(_text, incoming, StringComparison.OrdinalIgnoreCase)
-            || _text.EndsWith(incoming, StringComparison.OrdinalIgnoreCase))
+            || _text.EndsWith(incoming, StringComparison.OrdinalIgnoreCase)
+            || _text.Contains(incoming, StringComparison.OrdinalIgnoreCase))
         {
             return _text;
         }
@@ -77,7 +79,7 @@ public sealed class TranscriptBuffer
     private static int FindOverlap(string[] existingWords, string[] incomingWords)
     {
         var maximum = Math.Min(existingWords.Length, incomingWords.Length);
-        for (var length = maximum; length >= 2; length--)
+        for (var length = maximum; length >= 1; length--)
         {
             var matches = true;
             for (var index = 0; index < length; index++)
