@@ -1,3 +1,4 @@
+using System.IO;
 using System.Speech.Synthesis;
 using System.Threading.Channels;
 using System.Windows.Threading;
@@ -5,6 +6,7 @@ using System.Windows;
 using CaptionTranslator.Capture;
 using CaptionTranslator.Ocr;
 using CaptionTranslator.Pipeline;
+using CaptionTranslator.Speech;
 using CaptionTranslator.Translation;
 using DrawingBitmap = System.Drawing.Bitmap;
 using DrawingRectangle = System.Drawing.Rectangle;
@@ -18,7 +20,9 @@ public partial class MainWindow : Window
     private readonly TranscriptBuffer _pendingTranslation = new();
     private readonly TranscriptBuffer _translationTranscript = new();
     private readonly ScreenCaptureService _captureService = new();
+    private readonly AudioLoopbackCaptureService _audioCaptureService = new();
     private readonly WindowsOcrService _ocrService = new();
+    private readonly OfflineSpeechRecognitionService _speechRecognitionService;
     private readonly OfflinePhraseTranslator _translator = new();
     private readonly ArgosTranslator _argosTranslator = new();
     private readonly SpeechSynthesizer _speechSynthesizer = new();
@@ -31,19 +35,24 @@ public partial class MainWindow : Window
     private readonly CancellationTokenSource _speechCancellation = new();
     private readonly object _speechStateLock = new();
     private readonly Task _speechWorkerTask;
+    private readonly SemaphoreSlim _recognitionGate = new(1, 1);
     private DrawingRectangle? _captureRegion;
-    private bool _isRecognizing;
     private DateTime _nextTranslationAttemptUtc = DateTime.MinValue;
     private int _speechEnabled;
 
     public MainWindow()
     {
         InitializeComponent();
+        _speechRecognitionService = new(
+            _audioCaptureService,
+            ResolveWhisperModelPath());
         ConfigureSpeechVoice();
         SpeechEnabledCheckBox.Checked += SpeechEnabledCheckBox_Checked;
         SpeechEnabledCheckBox.Unchecked += SpeechEnabledCheckBox_Unchecked;
         _speechWorkerTask = SpeechWorkerAsync(_speechCancellation.Token);
         _captureService.FrameCaptured += CaptureService_FrameCaptured;
+        _speechRecognitionService.TextRecognized += SpeechRecognitionService_TextRecognized;
+        _speechRecognitionService.RecognitionFailed += SpeechRecognitionService_RecognitionFailed;
         Closed += MainWindow_Closed;
     }
 
@@ -58,8 +67,41 @@ public partial class MainWindow : Window
         StopSpeech();
     }
 
+    private void AudioTranslationEnabledCheckBox_Checked(object sender, RoutedEventArgs e)
+    {
+        _captureService.Stop();
+        ResetTranscriptState();
+
+        try
+        {
+            _speechRecognitionService.Start();
+            StartButton.IsEnabled = false;
+            StopButton.IsEnabled = true;
+            StatusText.Text = "Ouvindo o audio do sistema...";
+        }
+        catch (Exception exception)
+        {
+            _speechRecognitionService.Stop();
+            AudioTranslationEnabledCheckBox.IsChecked = false;
+            StartButton.IsEnabled = _captureRegion is not null;
+            StopButton.IsEnabled = false;
+            StatusText.Text = exception.Message;
+        }
+
+    }
+
+    private void AudioTranslationEnabledCheckBox_Unchecked(object sender, RoutedEventArgs e)
+    {
+        _speechRecognitionService.Stop();
+        StartButton.IsEnabled = _captureRegion is not null;
+        StopButton.IsEnabled = false;
+        StatusText.Text = "Captura pausada.";
+    }
+
     private async void MainWindow_Closed(object? sender, EventArgs e)
     {
+        _speechRecognitionService.Dispose();
+        _audioCaptureService.Dispose();
         _captureService.Dispose();
         _argosTranslator.Dispose();
         Volatile.Write(ref _speechEnabled, 0);
@@ -124,13 +166,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        _stabilizer.Reset();
-        _sourceTranscript.Clear();
-        _pendingTranslation.Clear();
-        _translationTranscript.Clear();
-        _nextTranslationAttemptUtc = DateTime.MinValue;
-        SourceText.Clear();
-        TranslationText.Clear();
+        ResetTranscriptState();
         _captureService.Start(region);
         StartButton.IsEnabled = false;
         StopButton.IsEnabled = true;
@@ -140,6 +176,7 @@ public partial class MainWindow : Window
     private void StopButton_Click(object sender, RoutedEventArgs e)
     {
         _captureService.Stop();
+        _speechRecognitionService.Stop();
         StartButton.IsEnabled = _captureRegion is not null;
         StopButton.IsEnabled = false;
         StatusText.Text = "Captura pausada.";
@@ -147,13 +184,12 @@ public partial class MainWindow : Window
 
     private async void CaptureService_FrameCaptured(object? sender, DrawingBitmap frame)
     {
-        if (_isRecognizing)
+        if (!await _recognitionGate.WaitAsync(0))
         {
             frame.Dispose();
             return;
         }
 
-        _isRecognizing = true;
         try
         {
             var recognizedText = await _ocrService.RecognizeAsync(frame);
@@ -163,60 +199,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var newSourceSegment = _sourceTranscript.GetNewSegment(stableText);
-            if (newSourceSegment.Length == 0)
-            {
-                return;
-            }
-
-            await Dispatcher.InvokeAsync(() =>
-            {
-                SourceText.Text = _sourceTranscript.Append(stableText);
-                SourceText.ScrollToEnd();
-            }, DispatcherPriority.Background);
-
-            var pendingText = _pendingTranslation.Append(newSourceSegment);
-            if (DateTime.UtcNow < _nextTranslationAttemptUtc)
-            {
-                return;
-            }
-
-            string? onlineTranslation;
-            try
-            {
-                onlineTranslation = await _argosTranslator.TranslateAsync(pendingText);
-            }
-            catch (Exception)
-            {
-                onlineTranslation = null;
-                _nextTranslationAttemptUtc = DateTime.UtcNow.AddSeconds(3);
-            }
-
-            if (!string.IsNullOrWhiteSpace(onlineTranslation))
-            {
-                _pendingTranslation.Clear();
-                await Dispatcher.InvokeAsync(
-                    () => UpdateTranslationText(onlineTranslation),
-                    DispatcherPriority.Background);
-            }
-            else
-            {
-                _nextTranslationAttemptUtc = DateTime.UtcNow.AddSeconds(3);
-                var offlineTranslation = _translator.Translate(pendingText);
-                if (offlineTranslation.StartsWith(OfflinePhraseTranslator.PartialMessage, StringComparison.Ordinal))
-                {
-                    offlineTranslation = offlineTranslation[OfflinePhraseTranslator.PartialMessage.Length..].Trim();
-                }
-
-                if (!offlineTranslation.StartsWith(OfflinePhraseTranslator.UnavailableMessage, StringComparison.Ordinal)
-                    && offlineTranslation.Length > 0)
-                {
-                    _pendingTranslation.Clear();
-                    await Dispatcher.InvokeAsync(
-                        () => UpdateTranslationText(offlineTranslation),
-                        DispatcherPriority.Background);
-                }
-            }
+            await ProcessRecognizedTextAsync(stableText);
         }
         catch (Exception exception)
         {
@@ -225,8 +208,117 @@ public partial class MainWindow : Window
         finally
         {
             frame.Dispose();
-            _isRecognizing = false;
+            _recognitionGate.Release();
         }
+    }
+
+    private async void SpeechRecognitionService_TextRecognized(object? sender, string recognizedText)
+    {
+        if (!await _recognitionGate.WaitAsync(0))
+        {
+            return;
+        }
+
+        try
+        {
+            await ProcessRecognizedTextAsync(recognizedText);
+        }
+        catch (Exception exception)
+        {
+            await Dispatcher.InvokeAsync(() => StatusText.Text = $"Falha no audio: {exception.Message}");
+        }
+        finally
+        {
+            _recognitionGate.Release();
+        }
+    }
+
+    private void SpeechRecognitionService_RecognitionFailed(object? sender, Exception exception)
+    {
+        Dispatcher.InvokeAsync(() => StatusText.Text = $"Falha no audio: {exception.Message}");
+    }
+
+    private async Task ProcessRecognizedTextAsync(string recognizedText)
+    {
+        var newSourceSegment = _sourceTranscript.GetNewSegment(recognizedText);
+        if (newSourceSegment.Length == 0)
+        {
+            return;
+        }
+
+        await Dispatcher.InvokeAsync(() =>
+        {
+            SourceText.Text = _sourceTranscript.Append(recognizedText);
+            ScheduleTranscriptScroll(SourceText);
+        }, DispatcherPriority.Background);
+
+        var pendingText = _pendingTranslation.Append(newSourceSegment);
+        if (DateTime.UtcNow < _nextTranslationAttemptUtc)
+        {
+            return;
+        }
+
+        string? onlineTranslation;
+        try
+        {
+            onlineTranslation = await _argosTranslator.TranslateAsync(pendingText);
+        }
+        catch (Exception)
+        {
+            onlineTranslation = null;
+            _nextTranslationAttemptUtc = DateTime.UtcNow.AddSeconds(3);
+        }
+
+        if (!string.IsNullOrWhiteSpace(onlineTranslation))
+        {
+            _pendingTranslation.Clear();
+            await Dispatcher.InvokeAsync(
+                () => UpdateTranslationText(onlineTranslation),
+                DispatcherPriority.Background);
+            return;
+        }
+
+        _nextTranslationAttemptUtc = DateTime.UtcNow.AddSeconds(3);
+        var offlineTranslation = _translator.Translate(pendingText);
+        if (offlineTranslation.StartsWith(OfflinePhraseTranslator.PartialMessage, StringComparison.Ordinal))
+        {
+            offlineTranslation = offlineTranslation[OfflinePhraseTranslator.PartialMessage.Length..].Trim();
+        }
+
+        if (!offlineTranslation.StartsWith(OfflinePhraseTranslator.UnavailableMessage, StringComparison.Ordinal)
+            && offlineTranslation.Length > 0)
+        {
+            _pendingTranslation.Clear();
+            await Dispatcher.InvokeAsync(
+                () => UpdateTranslationText(offlineTranslation),
+                DispatcherPriority.Background);
+        }
+    }
+
+    private void ResetTranscriptState()
+    {
+        _stabilizer.Reset();
+        _sourceTranscript.Clear();
+        _pendingTranslation.Clear();
+        _translationTranscript.Clear();
+        _nextTranslationAttemptUtc = DateTime.MinValue;
+        SourceText.Clear();
+        TranslationText.Clear();
+    }
+
+    private static string ResolveWhisperModelPath() =>
+        Environment.GetEnvironmentVariable("CAPTION_TRANSLATOR_WHISPER_MODEL")
+        ?? Path.Combine(AppContext.BaseDirectory, "Models", "ggml-base.en.bin");
+
+    private void ScheduleTranscriptScroll(System.Windows.Controls.TextBox textBox)
+    {
+        Dispatcher.BeginInvoke(
+            DispatcherPriority.ContextIdle,
+            new Action(() =>
+            {
+                textBox.CaretIndex = textBox.Text.Length;
+                textBox.ScrollToEnd();
+            }));
     }
 
     private void UpdateTranslationText(string translation)
@@ -238,7 +330,7 @@ public partial class MainWindow : Window
         }
 
         TranslationText.Text = _translationTranscript.Append(newTranslationSegment);
-        TranslationText.ScrollToEnd();
+    ScheduleTranscriptScroll(TranslationText);
         SpeakTranslationSegment(newTranslationSegment);
     }
 

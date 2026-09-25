@@ -7,6 +7,9 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="Whisper.net" Version="1.8.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.8.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
       <PrivateAssets>all</PrivateAssets>
@@ -16,5 +19,8 @@
     <Compile Include="../../src/CaptionTranslator/Pipeline/CaptionStabilizer.cs" Link="Pipeline/CaptionStabilizer.cs" />
     <Compile Include="../../src/CaptionTranslator/Pipeline/TranscriptBuffer.cs" Link="Pipeline/TranscriptBuffer.cs" />
     <Compile Include="../../src/CaptionTranslator/Translation/OfflinePhraseTranslator.cs" Link="Translation/OfflinePhraseTranslator.cs" />
+    <Compile Include="../../src/CaptionTranslator/Capture/AudioChunk.cs" Link="Capture/AudioChunk.cs" />
+    <Compile Include="../../src/CaptionTranslator/Capture/AudioLoopbackCaptureService.cs" Link="Capture/AudioLoopbackCaptureService.cs" />
+    <Compile Include="../../src/CaptionTranslator/Speech/OfflineSpeechRecognitionService.cs" Link="Speech/OfflineSpeechRecognitionService.cs" />
   </ItemGroup>
 </Project>

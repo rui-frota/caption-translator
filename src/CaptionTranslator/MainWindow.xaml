@@ -71,6 +71,7 @@
             <Button x:Name="StopButton" Margin="8,0,0,0" Style="{StaticResource SecondaryButton}" Click="StopButton_Click" IsEnabled="False">Parar</Button>
           </StackPanel>
           <StackPanel Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
+            <CheckBox x:Name="AudioTranslationEnabledCheckBox" VerticalAlignment="Center" Foreground="#334155" Checked="AudioTranslationEnabledCheckBox_Checked" Unchecked="AudioTranslationEnabledCheckBox_Unchecked">Traduzir audio do sistema</CheckBox>
             <CheckBox x:Name="SpeechEnabledCheckBox" VerticalAlignment="Center" Foreground="#334155">Ler traducao</CheckBox>
             <TextBlock Margin="16,0,8,0" VerticalAlignment="Center" Foreground="#64748B" FontSize="12">Volume</TextBlock>
             <Slider x:Name="SpeechVolumeSlider" Width="96" Minimum="0" Maximum="100" Value="70" VerticalAlignment="Center" />

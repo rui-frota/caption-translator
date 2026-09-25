@@ -14,6 +14,8 @@ O projeto é um protótipo funcional. A captura, o OCR e a tradução são execu
 - Traduz cada segmento novo de legenda com o modelo neural Argos EN->PT e concatena o resultado sem repetir o transcript anterior.
 - Mantém a tradução no segundo campo e evita repetir legendas idênticas.
 - Executa o Argos em um serviço HTTP local em `127.0.0.1:8765`.
+- Permite escolher entre OCR de tela e captura do áudio do sistema via loopback WASAPI.
+- Transcreve o áudio localmente com Whisper antes de enviar o texto ao tradutor.
 
 ## Requisitos
 
@@ -29,6 +31,8 @@ O projeto é um protótipo funcional. A captura, o OCR e a tradução são execu
 - .NET 8 SDK para Windows.
 - .NET 8 Desktop Runtime, caso o aplicativo seja executado por `.exe` em um computador que não tenha o SDK.
 - PowerShell 5.1 ou PowerShell 7.
+- Dispositivo de saída de áudio do Windows habilitado para o modo de áudio.
+- Microsoft Visual C++ Redistributable 2019 ou superior (x64) para o runtime CPU do Whisper.
 
 ### Ferramentas WSL
 
@@ -224,6 +228,27 @@ dotnet --list-sdks
 ```
 
 Para executar apenas o `.exe`, o **.NET 8 Desktop Runtime** também é suficiente. Para restaurar, testar e compilar, instale o SDK.
+
+## Traducao por audio do sistema
+
+Na janela principal, escolha **Audio do sistema** em **Fonte da traducao**. O aplicativo captura o dispositivo de saida padrao do Windows via WASAPI loopback; ele nao usa o microfone. O audio e convertido para texto pelo Whisper local e passa pelo mesmo fluxo de traducao do OCR.
+
+Baixe um modelo Whisper em uma pasta local. O modelo pequeno em ingles e uma opcao inicial equilibrada entre latencia e qualidade:
+
+```powershell
+New-Item -ItemType Directory -Force .\models | Out-Null
+Invoke-WebRequest `
+  -Uri "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin?download=true" `
+  -OutFile .\models\ggml-base.en.bin
+```
+
+Por padrao, o aplicativo procura `models\ggml-base.en.bin` ao lado do executavel. Para usar outro caminho:
+
+```powershell
+$env:CAPTION_TRANSLATOR_WHISPER_MODEL = "C:\modelos\ggml-base.en.bin"
+```
+
+O reconhecimento e executado localmente, mas modelos maiores aumentam o uso de CPU e a latencia. O primeiro teste deve ser feito com o modelo `base.en` e audio em ingles. Se o modelo nao existir ou o dispositivo de saida nao estiver disponivel, a janela exibira o erro e o modo nao sera iniciado.
 
 ## Compilar e testar
 
