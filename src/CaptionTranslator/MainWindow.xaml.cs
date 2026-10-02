@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Speech.Synthesis;
 using System.Threading.Channels;
 using System.Windows.Threading;
@@ -182,6 +183,34 @@ public partial class MainWindow : Window
         StatusText.Text = "Captura pausada.";
     }
 
+    private void CopySourceTextButton_Click(object sender, RoutedEventArgs e)
+    {
+        CopyTextToClipboard(SourceText.Text, "Texto em ingles copiado.");
+    }
+
+    private void CopyTranslationTextButton_Click(object sender, RoutedEventArgs e)
+    {
+        CopyTextToClipboard(TranslationText.Text, "Traducao copiada.");
+    }
+
+    private void CopyTextToClipboard(string text, string successMessage)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        try
+        {
+            System.Windows.Clipboard.SetText(text);
+            StatusText.Text = successMessage;
+        }
+        catch (ExternalException)
+        {
+            StatusText.Text = "Nao foi possivel acessar a area de transferencia.";
+        }
+    }
+
     private async void CaptureService_FrameCaptured(object? sender, DrawingBitmap frame)
     {
         if (!await _recognitionGate.WaitAsync(0))
@@ -249,6 +278,7 @@ public partial class MainWindow : Window
         await Dispatcher.InvokeAsync(() =>
         {
             SourceText.Text = _sourceTranscript.Append(recognizedText);
+            CopySourceTextButton.IsEnabled = !string.IsNullOrWhiteSpace(SourceText.Text);
             ScheduleTranscriptScroll(SourceText);
         }, DispatcherPriority.Background);
 
@@ -304,6 +334,8 @@ public partial class MainWindow : Window
         _nextTranslationAttemptUtc = DateTime.MinValue;
         SourceText.Clear();
         TranslationText.Clear();
+        CopySourceTextButton.IsEnabled = false;
+        CopyTranslationTextButton.IsEnabled = false;
     }
 
     private static string ResolveWhisperModelPath() =>
@@ -330,7 +362,8 @@ public partial class MainWindow : Window
         }
 
         TranslationText.Text = _translationTranscript.Append(newTranslationSegment);
-    ScheduleTranscriptScroll(TranslationText);
+        CopyTranslationTextButton.IsEnabled = !string.IsNullOrWhiteSpace(TranslationText.Text);
+        ScheduleTranscriptScroll(TranslationText);
         SpeakTranslationSegment(newTranslationSegment);
     }
 
